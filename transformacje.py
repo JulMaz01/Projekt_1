@@ -1,4 +1,4 @@
-from math import sin, cos, tan, sqrt, asin, atan, atan2, degrees, radians
+from math import sin, cos, tan, sqrt, asin, atan, atan2, degrees, radians, pi
 import numpy as np
 
 class Transformacje:
@@ -31,8 +31,28 @@ class Transformacje:
         self.ecc2 = (2 * self.flat - self.flat ** 2) # eccentricity**2
 
 # ---------------------------------------------------------------------------------------------
+
+    def func_n(self, f: float) -> float:
+        """
+        Funkcja obliczająca promień krzywizny w I wertykale
+ 
+        Parameters
+        ----------                
+        INPUT:
+            phi : [float] - szerokość geodezyjna (decimal degrees)
+
+        Returns
+        -------     
+        OUTPUT:
+            N : [float] - promien krzywizny (meters)
+        """
+        N = (self.a)/sqrt(1-self.ecc2*(sin(f)**2))
+        
+        return(N)
+
+# ---------------------------------------------------------------------------------------------
     
-    def xyz2flh(self, X, Y, Z, output = 'dec_degree'):
+    def xyz2plh(self, X, Y, Z, output = 'dec_degree'):
         """
         Algorytm Hirvonena - algorytm transformacji współrzędnych ortokartezjańskich (X, Y, Z)
         na współrzędne geodezyjne: długość, szerokość i wysokość elipsoidalna (phi, lam, h). Jest to proces iteracyjny. 
@@ -48,9 +68,9 @@ class Transformacje:
         Returns
         -------        
         OUTPUT:  
-            phi : [float] : szerokość geodezyjna (decimal degrees)
-            lam : [float] : długość geodezyjna (decimal degrees)
-            h   : [float] : wysokość elipsoidalna (meters)
+            phi : [float] - szerokość geodezyjna (decimal degrees)
+            lam : [float] - długość geodezyjna (decimal degrees)
+            h   : [float] - wysokość elipsoidalna (meters)
 
          OUTPUT OPTIONS: 
             dec_degree - decimal degree
@@ -80,66 +100,44 @@ class Transformacje:
 
 # ---------------------------------------------------------------------------------------------
 
-    def flh2XYZ(self, f, l, h):
+    def flh2xyz(self, f:float, l:float, h:float):
         """
         Algorytm transformacji współrzędnych geodezyjnych (phi, lam, h) na współrzędne ortokartezjańskie (X, Y, Z)
 
         Parameters
         ----------        
         INPUT:
-            phi : [float] : szerokość geodezyjna (radians)
-            lam : [float] : długość geodezyjna (radians)
-            h   : [float] : wysokość elipsoidalna (meters)
+            phi : [float] - szerokość geodezyjna (decimal degrees)
+            lam : [float] - długość geodezyjna (decimal degrees)
+            h   : [float] - wysokość elipsoidalna (meters)
             
         Returns
         -------
-                OUTPUT: Współrzędne w układzie ortokartezjańskim
+        OUTPUT: Współrzędne w układzie ortokartezjańskim
             X : [float] - współrzędna geocentryczna (meters)
             Y : [float] - współrzędna geocentryczna (meters)
             Z : [float] - współrzędna geocentryczna (meters) 
 
         """
-        N = self.a / sqrt(1 - self.ecc2 * (sin(l))**2);
-        X = (N+h)*cos(f)*cos(l)
-        Y = (N+h)*cos(f)*sin(l)
-        Z = (N*(1-self.ecc2)+h)*sin(f)
+        N = self.func_n(f)
+        X = (N + h)*cos(f)*cos(l)
+        Y = (N + h)*cos(f)*sin(l)
+        X = (N*(1-self.ecc2)+h)*sin(f)
         
         return(X,Y,Z)
- 
- # ---------------------------------------------------------------------------------------------       
- 
-    def get_mean_of_x_y_z(coordinates: np.ndarray):          
-        """
-        Algorytm obliczający srednią arytmetyczną współrzędnych (X,Y,Z)
-        
-        Parameters
-        ----------
-        INPUT:        
-            [X, Y, Z] : [float] - tablica współrzędnych geocentrycznych (meters)
-  
-        Returns
-        -------        
-        OUTPUT:
-            X_mean : [float] -  współrzędna referencyjna X (meters)
-            Y_mean : [float] -  współrzędna referencyjna Y (meters)
-            Z_mean : [float] -  współrzędna referencyjna Z (meters)   
-        
-        """            
-        x_mean, y_mean, z_mean = coordinates.mean(axis=0)
-        return x_mean, y_mean, z_mean
 
  # ---------------------------------------------------------------------------------------------               
 
-    def enu(self, X, Y, Z, X_mean, Y_mean, Z_mean):
+    def neu(self, f, l, h, X, Y, Z):
         """
-        Algorytm obliczający współrzędne geodezyjne wektora przestrzennego ENU. 
+        Algorytm obliczający współrzędne geodezyjne wektora przestrzennego neu. 
     
         Parameters
         ----------
         INPUT:        
-            X_mean : [float] -  współrzędna referencyjna X (meters)
-            Y_mean : [float] -  współrzędna referencyjna Y (meters)
-            Z_mean : [float] -  współrzędna referencyjna Z (meters)
+            phi : [float] - szerokość geodezyjna (decimal degrees)
+            lam : [float] - długość geodezyjna (decimal degrees)
+            h   : [float] - wysokość elipsoidalna (meters)
             X : [float] - współrzędna geocentryczna (meters)
             Y : [float] - współrzędna geocentryczna (meters)
             Z : [float] - współrzędna geocentryczna (meters)
@@ -147,55 +145,81 @@ class Transformacje:
         Returns
         -------        
         OUTPUT:
-            ENU : [float] - lista złożona z 3-elementów: E, N, U
+            n,e,u : [float] - współrzędne geodezyjne wektora przestrzennego
     
         """   
-        f, l, h = self.xyz2flh(X, Y, Z)
-    
-        delta_X = X - X_mean
-        delta_Y = Y - Y_mean
-        delta_Z = Z - Z_mean
-    
-        Rt = np.matrix([((-sin(f) * cos(l)), (-sin(f) * sin(l)), (cos(f))),
-                        ((-sin(l)), (cos(l)), (0)),
-                        ((cos(f) * cos(l)), (cos(f) * sin(l)), (sin(f))),])
-    
-        d = np.matrix([delta_X, delta_Y, delta_Z])
-        d = d.T
-        neu = Rt * d
-        enu = neu[1], neu[0], neu[2]
+        N = self.func_n(f)
         
-        return enu
+        Xp = (N + h) * cos(f) * cos(l)
+        Yp = (N + h) * cos(f) * sin(l)
+        Zp = (N * (1 - self.ecc2) + h) * sin(f)
+        
+        XYZp = np.array([Xp, Yp, Zp])
+        XYZs = np.array([X, Y, Z])
+        
+        XYZ = XYZs - XYZp
+        XYZ = np.array(XYZ)
+        	
+        Rneu = np.array([[-sin(f)*cos(l), -sin(l), cos(f)*cos(l)],
+                         [-sin(f)*sin(l), cos(l), cos(f)*sin(l)],
+                         [cos(f), 0, sin(f)]])
+        
+        n, e, u = Rneu.T @ XYZ
+      
+        return(n, e, u)
  
-    
  # ---------------------------------------------------------------------------------------------
     
-    def sigma(self, f):        
+    def sigma (self, f: float) -> float:        
         """
-        Algorytm obliczący długosć łuku południka.
+        Algorytm obliczący długosć łuku południka, który przyjmuje f wyliczone z hirvonena
 
         Parameters
         ----------
         INPUT:
-            f  :[float] : szerokość geodezyjna (radians)
+            f : [float] - szerokość geodezyjna (decimal degrees)
 
         Returns
         -------            
         OUTPUT:
-            si :[float] : długosć łuku południka (meters)
+            si : [float] - długosć łuku południka (meters)
             
         """               
-        A0 = 1 - (self.ecc2 / 4) - (3 / 64) * (self.ecc2**2) - (5 / 256) * (self.ecc2**3)
-        A2 = (3 / 8) * (self.ecc2 + (self.ecc2**2) / 4 + (15 / 128) * (self.ecc2**3))
-        A4 = (15 / 256) * (self.ecc2**2 + 3 / 4 * (self.ecc2**3))
-        A6 = (35 / 3072) * self.ecc2**3
-        si = self.a * (A0 * f - A2 * sin(2 * f) + A4 * sin(4 * f) - A6 * sin(6 * f))
+        A0 = 1 - (self.ecc2/4)-((3*(self.ecc2**2))/64)-((5*(self.ecc2**3))/256)
+        A2 = (3/8)*(self.ecc2+((self.ecc2**2)/4)+((15*(self.ecc2**3))/128))
+        A4 = (15/256)*((self.ecc2**2)+((3*(self.ecc2**3))/4))
+        A6 = (35*(self.ecc2**3))/3072
+        si = self.a*(A0*f - A2*sin(2*f) + A4*sin(4*f) - A6*sin(6*f))
 
-        return si
+        return(si)
+
+ # ---------------------------------------------------------------------------------------------
+    
+    def get_l0(self, l: float) -> int:
+         
+        """
+        Algorytm obliczający wartosć południka srodkowego L0 na podstawie l
+        
+        INPUT:
+            l : [float] - długość geodezyjna (decimal degrees)
+            
+        OUTPUT:
+            L0 : [float] - południk srodkowy w danym układzie (radians)
+        """        
+        if 13.5 < l <= 16.5:
+            L0 = 15 * pi / 180
+        if 16.5 < l <= 19.5:
+            L0 = 18 * pi / 180
+        if 19.5 < l <= 22.5:
+            L0 = 21 * pi / 180
+        if 22.5 < l <= 25.5:
+            L0 = 24 * pi / 180
+            
+        return(L0)
     
  # ---------------------------------------------------------------------------------------------   
     
-    def fl2xy(self, f, l, L0):
+    def fl2xy(self, phi: float, lam: float) -> tuple:
         """
         Algorytm przeliczający współrzędne godezyjne (phi, lam) na współrzędne w 
         odwzorowaniu Gaussa-Krugera (xgk, ygk)
@@ -203,84 +227,119 @@ class Transformacje:
         Parameters
         ----------
         INPUT:
-            phi : [float] - szerokość geodezyjna (radians)
-            lam : [float] - długość geodezyjna (radians)
-            L0  : [float] - południk srodkowy w danym układzie (radians)
+            phi : [float] - szerokość geodezyjna (decimal degrees)
+            lam : [float] - długość geodezyjna (decimal degrees)
 
         Returns
         -------
         OUTPUT:
-            xgk :[float] : współrzędna x w odwzorowaniu Gaussa-Krugera (meters)
-            ygk :[float] : współrzędna y w odwzorowaniu Gaussa-Krugera (meters)
+            xgk :[float] - współrzędna x w odwzorowaniu Gaussa-Krugera (meters)
+            ygk :[float] - współrzędna y w odwzorowaniu Gaussa-Krugera (meters)
 
         """
-        b2 = (self.a**2) * (1 - self.ecc2)
-        ep2 = (self.a**2 - b2) / b2
+        f = phi*pi/180
+        l = lam*pi/180
+        b2 = (self.a**2)*(1-self.ecc2)
+        ep2 = (self.a**2-b2)/b2
         t = tan(f)
-        n2 = ep2 * (cos(f) ** 2)
-        N = self.a / sqrt(1 - self.ecc2 * (sin(l))**2)
+        n2 = ep2*(cos(f)**2)
+        N = self.func_n(f)
         si = self.sigma(f)
-        dL = l - L0
-        xgk = si + (dL**2 / 2) * N * sin(f) * cos(f) * (1 + (dL**2 / 12) * cos(f) ** 2 * (5 - t**2 + 9 * n2 + 4 * n2**2) + (dL**4 / 360) * cos(f) ** 4 * (61 - 58 * t**2 + t**4 + 270 * n2 - 330 * n2 * t**2))
-        ygk = (dL * N * cos(f) * ( 1 + (dL**2 / 6) * cos(f) ** 2 * (1 - t**2 + n2) + (dL**4 / 120) * cos(f) ** 4 * (5 - 18 * t**2 + t**4 + 14 * n2 - 58 * n2 * t**2)))
-
-        return (xgk, ygk)
+        dL = l - self.get_l0(lam) 
+        xgk = si + ((dL**2)/2)*N*sin(f)*cos(f)*(1 + (dL**2/12)*cos(f)**2*(5 - t**2 + 9*n2 + 4*n2**2) + (dL**4/360)*cos(f)**4*(61 - 58*t**2 + t**4 + 270*n2 - 330*n2*t**2))
+        ygk = dL*N*cos(f)*(1 + (dL**2/6)*cos(f)**2*(1 - t**2 + n2) + (dL**4/120)*cos(f)**4*(5 - 18*t**2 + t**4 + 14*n2 - 58*n2*t**2))
+       
+        return(xgk,ygk)
 
 # ---------------------------------------------------------------------------------------------
 
-    def u2000(self, f, l):
+    def u2000(self, f:float, l:float):
         """
         Algorytm przeliczający współrzędne geodezyjne (phi, lam) na współrzędne w układzie PL-2000.
 
         Parameters
         ----------            
         INPUT:
-            f   :[float] : szerokość geodezyjna (radiany)
-            l   :[float] : długość geodezyjna (radiany)
+            f : [float] - szerokość geodezyjna (decimal degrees)
+            l : [float] - długość geodezyjna (decimal degreees)
 
         Returns
         -------    
         OUTPUT:
-            x00 :[float] : współrzędna X w układzie 2000
-            y00 :[float] : współrzędna Y w układzie 2000
+            x00 : [float] - współrzędna X w układzie PL-2000
+            y00 : [float] - współrzędna Y w układzie PL-2000
     
-        """
-        L0 = (np.floor((f + 1.5) / 3)) * 3   
-        xgk, ygk = self.fl2xy(f, l, L0)    
-        m2000 = 0.999923    
+        """       
+        m2000 = 0.999923
+        xgk, ygk = self.fl2xy(f, l)
+        l0 = self.get_l0(l)
         x00 = xgk * m2000
-        y00 = ygk * m2000 + L0 / 3 * 1000000 + 500000
+        y00 = ygk * m2000 + (l0*180/pi/3)* 1000000 + 500000;
     
         return (x00, y00)
 
 # ---------------------------------------------------------------------------------------------
 
-    def u1992(self, xgk, ygk, L0):      
+    def u1992(self, f:float, l:float):      
         """
         Algorytm przeliczający współrzędne geodezyjne (phi, lam) na współrzędne w układzie 1992.
 
         Parameters
         ----------      
         INPUT:
-            f   :[float] : szerokość geodezyjna (radiany)
-            l   :[float] : długość geodezyjna (radiany)
+            f : [float] - szerokość geodezyjna (decimal degreees)
+            l : [float] - długość geodezyjna (decimal degreees)
     
         Returns
         -------    
         OUTPUT:
-            x92 :[float] : współrzędna X w układzie 1992
-            y92 :[float] : współrzędna Y w układzie 1992
+            x92 : [float] - współrzędna X w układzie PL-1992
+            y92 : [float] - współrzędna Y w układzie PL-1992
     
-        """        
-        m92 = 0.9993        
-        x92 = xgk * m92 - 5300000
-        y92 = ygk * m92 + 500000
+        """
+        xgk, ygk = self.fl2xy(f, l)
+        x92 = xgk * 0.9993-5300000
+        y92 = ygk *0.9993+500000
         
         return(x92,y92)
 
 # ---------------------------------------------------------------------------------------------
 
-    def odl2D(A, B):
+    def azymut_elewacja(self, f, l, h, X, Y, Z):
+        """
+        Algorytm obliczający elewację (kąt horyzontalny) i azymut na podstawie współrzędnych geodezyjnych wektora przestrzennego neu. 
+    
+        Parameters
+        ----------
+        INPUT:        
+            phi : [float] - szerokość geodezyjna (decimal degrees)
+            lam : [float] - długość geodezyjna (decimal degrees)
+            h   : [float] - wysokość elipsoidalna (meters)
+            X : [float] - współrzędna geocentryczna (meters)
+            Y : [float] - współrzędna geocentryczna (meters)
+            Z : [float] - współrzędna geocentryczna (meters)
+    
+        Returns
+        -------        
+        OUTPUT:
+            el : [float] - kąt horyzontalny (decimal degree)
+            Az : [float] - azymut (decimal degree)
+    
+        """   
+        n, e, u = self.neu(f, l, h, X, Y, Z)
+
+        azymut = atan2(e, n)
+        azymut = np.rad2deg(azymut)
+        azymut = azymut + 360 if azymut < 0 else azymut
+
+        elewacja = asin(u/(sqrt(e**2+n**2+u**2)))
+        elewacja = np.rad2deg(elewacja)
+
+        return(azymut, elewacja)
+
+# ---------------------------------------------------------------------------------------------
+
+    def odl2D(self, A, B):
         """
         Algorytm obliczający odległosć pomiędzy dwoma punktami A, B o współrzędnych (X,Y)  
         
@@ -296,13 +355,15 @@ class Transformacje:
             odl_2D : [float] - odległość pomiędzy punktami A, B (meters)
     
         """
-        odl_2D = sqrt( (A[0] - B[0])**2 + (A[1] - B[1])**2 )
+        x1, y1 = A[0], A[1]
+        x2, y2 = B[0], B[1]
+        odl_2D = sqrt((x2 - x1)**2+(y2 - y1)**2)
 
         return(odl_2D)
 
 # ---------------------------------------------------------------------------------------------
 
-    def odl3D(A, B):
+    def odl3D(self, A, B):
         """
         Algorytm obliczający odległosć pomiędzy dwoma punktami A, B o współrzędnych przestrzennych-3D (X,Y,Z)  
         
@@ -319,55 +380,16 @@ class Transformacje:
             odl_3D : [float] - odległość 3D pomiędzy punktami A, B (meters)
     
         """
-        odl_3D = sqrt( (A[0] - B[0])**2 + (A[1] - B[1])**2 + (A[2] - B[2])**2 )
+        x1, y1, z1 = A[0], A[1], A[2]
+        x2, y2, z2 = B[0], B[1], B[2]
+        odl_3D = sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
  
         return(odl_3D)
 
 # ---------------------------------------------------------------------------------------------
 
-    def Azymut(self, enu):
-        """
-        Algorytm obliczający azymut na podstawie współrzędnych geodezyjnych wektora przestrzennego ENU.
-        
-       Parameters
-       ----------      
-       INPUT:
-           ENU : [float] - lista złożona z 3-elementów: E, N, U
-        
-        Returns
-        -------    
-        OUTPUT:
-            Az : [float] - azymut (decimal degree)
-    
-        """       
-        Az = atan2(enu[0],enu[1])
-        Az = np.rad2deg(Az)
-        Az = Az + 360 if Az < 0 else Az
-        
-        return(Az)
+    naglowek = 'Transormacja współrzędnych geodezyjnych \\ Julia Mazurkiewicz \\ 01160141@pw.edu.pl\n\n  X               Y               Z                 f              l              h             n                e                u             x00             y00            x92            y92               Az             el              2D             3D\n'
 
-# ---------------------------------------------------------------------------------------------
-
-    def Elewacja(self, enu):
-        """
-        Algorytm obliczający elewację (kąt horyzontalny) na podstawie współrzędnych geodezyjnych wektora przestrzennego ENU.
-        
-       Parameters
-       ----------      
-       INPUT:
-           ENU : [float] - lista złożona z 3-elementów: E, N, U
-        
-        Returns
-        -------    
-        OUTPUT:
-           el : [float] - kąt horyzontalny (decimal degree)
-    
-        """
-        el = asin(enu[2]/(sqrt(enu[0]**2+enu[1]**2+enu[2]**2)))
-        el = np.rad2deg(el)
-        
-        return(el)
- 
 # ---------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -377,7 +399,3 @@ if __name__ == "__main__":
     X = 3664940.500; Y = 1409153.590; Z = 5009571.170
     phi, lam, h = geo.xyz2plh(X, Y, Z)
     print(phi, lam, h)
-    phi, lam, h = geo.xyz2plh2(X, Y, Z)
-    print(phi, lam, h)
-        
-    
